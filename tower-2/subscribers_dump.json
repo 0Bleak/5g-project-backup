@@ -1,0 +1,278 @@
+[
+  {
+    _id: ObjectId('69de385200a8bb344bf75944'),
+    ambr: { downlink: { value: 1, unit: 3 }, uplink: { value: 1, unit: 3 } },
+    schema_version: 1,
+    msisdn: [],
+    imeisv: '8679780500131140',
+    mme_host: [],
+    mme_realm: [],
+    purge_flag: [],
+    access_restriction_data: 32,
+    subscriber_status: 0,
+    operator_determined_barring: 0,
+    network_access_mode: 0,
+    subscribed_rau_tau_timer: 12,
+    imsi: '001010000000004',
+    security: {
+      k: '0c0a34601d4f07677303652c0462535b',
+      amf: '8000',
+      op: null,
+      opc: '63bfa50ee6523365ff14c1f45f88737d',
+      sqn: Long('12833')
+    },
+    slice: [
+      {
+        _id: ObjectId('69de385200a8bb344bf75945'),
+        sst: 1,
+        default_indicator: true,
+        session: [
+          {
+            qos: {
+              arp: {
+                priority_level: 8,
+                pre_emption_capability: 1,
+                pre_emption_vulnerability: 1
+              },
+              index: 9
+            },
+            ambr: {
+              downlink: { value: 1, unit: 3 },
+              uplink: { value: 1, unit: 3 }
+            },
+            _id: ObjectId('69de385200a8bb344bf75946'),
+            name: 'srsapn',
+            type: 3,
+            pcc_rule: []
+          }
+        ],
+        sd: '000001'
+      }
+    ],
+    __v: 0
+  },
+  {
+    _id: ObjectId('69de5efd00a8bb344bf75952'),
+    ambr: { downlink: { value: 1, unit: 3 }, uplink: { value: 1, unit: 3 } },
+    schema_version: 1,
+    msisdn: [],
+    imeisv: '8679780500134840',
+    mme_host: [],
+    mme_realm: [],
+    purge_flag: [],
+    access_restriction_data: 32,
+    subscriber_status: 0,
+    operator_determined_barring: 0,
+    network_access_mode: 0,
+    subscribed_rau_tau_timer: 12,
+    imsi: '001010000000005',
+    security: {
+      k: '0c0a34601d4f07677303652c0462535b',
+      amf: '8000',
+      op: null,
+      opc: '63bfa50ee6523365ff14c1f45f88737d',
+      sqn: Long('11713')
+    },
+    slice: [
+      {
+        sst: 1,
+        default_indicator: true,
+        session: [
+          {
+            name: 'srsapn',
+            type: 3,
+            ambr: {
+              downlink: { value: 1, unit: 3 },
+              uplink: { value: 1, unit: 3 }
+            },
+            qos: {
+              index: 9,
+              arp: {
+                priority_level: 8,
+                pre_emption_capability: 1,
+                pre_emption_vulnerability: 1
+              }
+            }
+          }
+        ],
+        sd: '000003'
+      }
+    ],
+    __v: 0
+  },
+  {
+    _id: ObjectId('69de5f2100a8bb344bf75957'),
+    ambr: { downlink: { value: 1, unit: 3 }, uplink: { value: 1, unit: 3 } },
+    schema_version: 1,
+    msisdn: [],
+    imeisv: '3506296438610484',
+    mme_host: [],
+    mme_realm: [],
+    purge_flag: [],
+    access_restriction_data: 32,
+    subscriber_status: 0,
+    operator_determined_barring: 0,
+    network_access_mode: 0,
+    subscribed_rau_tau_timer: 12,
+    imsi: '001010000000003',
+    security: {
+      k: '0c0a34601d4f07677303652c0462535b',
+      amf: '8000',
+      op: null,
+      opc: '63bfa50ee6523365ff14c1f45f88737d',
+      sqn: Long('9473')
+    },
+    slice: [
+      {
+        _id: ObjectId('69de5f2100a8bb344bf75958'),
+        sst: 1,
+        default_indicator: true,
+        session: [
+          {
+            qos: {
+              arp: {
+                priority_level: 8,
+                pre_emption_capability: 1,
+                pre_emption_vulnerability: 1
+              },
+              index: 9
+            },
+            ambr: {
+              downlink: { value: 1, unit: 3 },
+              uplink: { value: 1, unit: 3 }
+            },
+            _id: ObjectId('69de5f2100a8bb344bf75959'),
+            name: 'srsapn',
+            type: 3,
+            pcc_rule: []
+          }
+        ],
+        sd: '000002'
+      }
+    ],
+    __v: 0
+  },
+  {
+    _id: ObjectId('6a0c0e41fd0910f40544ba89'),
+    imsi: '001010000000006',
+    security: {
+      k: '0c0a34601d4f07677303652c0462535b',
+      opc: '63bfa50ee6523365ff14c1f45f88737d',
+      amf: '8000',
+      sqn: Long('288')
+    },
+    schema_version: 1,
+    access_restriction_data: 32,
+    subscriber_status: 0,
+    network_access_mode: 0,
+    ambr: { downlink: { value: 1, unit: 3 }, uplink: { value: 1, unit: 3 } },
+    slice: [
+      {
+        sst: 1,
+        sd: '000003',
+        default_indicator: true,
+        session: [
+          {
+            name: 'srsapn',
+            type: 3,
+            qos: {
+              index: 9,
+              arp: {
+                priority_level: 8,
+                pre_emption_capability: 1,
+                pre_emption_vulnerability: 1
+              }
+            },
+            ambr: {
+              downlink: { value: 1, unit: 3 },
+              uplink: { value: 1, unit: 3 }
+            }
+          }
+        ]
+      }
+    ],
+    imeisv: '3534900698733253'
+  },
+  {
+    _id: ObjectId('6a0c0e41fd0910f40544ba8a'),
+    imsi: '001010000000007',
+    security: {
+      k: '0c0a34601d4f07677303652c0462535b',
+      opc: '63bfa50ee6523365ff14c1f45f88737d',
+      amf: '8000',
+      sqn: Long('288')
+    },
+    schema_version: 1,
+    access_restriction_data: 32,
+    subscriber_status: 0,
+    network_access_mode: 0,
+    ambr: { downlink: { value: 1, unit: 3 }, uplink: { value: 1, unit: 3 } },
+    slice: [
+      {
+        sst: 1,
+        sd: '000001',
+        default_indicator: true,
+        session: [
+          {
+            name: 'srsapn',
+            type: 3,
+            qos: {
+              index: 9,
+              arp: {
+                priority_level: 8,
+                pre_emption_capability: 1,
+                pre_emption_vulnerability: 1
+              }
+            },
+            ambr: {
+              downlink: { value: 1, unit: 3 },
+              uplink: { value: 1, unit: 3 }
+            }
+          }
+        ]
+      }
+    ],
+    imeisv: '3534900698733253'
+  },
+  {
+    _id: ObjectId('6a0c0e41fd0910f40544ba8b'),
+    imsi: '001010000000008',
+    security: {
+      k: '0c0a34601d4f07677303652c0462535b',
+      opc: '63bfa50ee6523365ff14c1f45f88737d',
+      amf: '8000',
+      sqn: Long('320')
+    },
+    schema_version: 1,
+    access_restriction_data: 32,
+    subscriber_status: 0,
+    network_access_mode: 0,
+    ambr: { downlink: { value: 1, unit: 3 }, uplink: { value: 1, unit: 3 } },
+    slice: [
+      {
+        sst: 1,
+        sd: '000002',
+        default_indicator: true,
+        session: [
+          {
+            name: 'srsapn',
+            type: 3,
+            qos: {
+              index: 9,
+              arp: {
+                priority_level: 8,
+                pre_emption_capability: 1,
+                pre_emption_vulnerability: 1
+              }
+            },
+            ambr: {
+              downlink: { value: 1, unit: 3 },
+              uplink: { value: 1, unit: 3 }
+            }
+          }
+        ]
+      }
+    ],
+    imeisv: '3534900698733253'
+  }
+]

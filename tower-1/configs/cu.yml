@@ -1,0 +1,28 @@
+cu_cp:
+  inactivity_timer: 7200
+  amf:
+    addr: 192.168.0.3
+    port: 38412
+    bind_addr: 192.168.0.2
+    supported_tracking_areas:
+      - tac: 7
+        plmn_list:
+          - plmn: "00101"
+            tai_slice_support_list:
+              - sst: 1
+              - sst: 1
+                sd: 1
+              - sst: 1
+                sd: 2
+              - sst: 1
+                sd: 3
+  f1ap:
+    bind_addr: 127.0.10.1
+cu_up:
+  f1u:
+    socket:
+      -
+        bind_addr: 127.0.10.1
+log:
+  filename: /tmp/cu.log
+  all_level: info
