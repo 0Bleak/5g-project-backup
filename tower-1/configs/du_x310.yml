@@ -14,7 +14,7 @@ ru_sdr:
 cell_cfg:
   dl_arfcn: 368500
   band: 3
-  channel_bandwidth_MHz: 10
+  channel_bandwidth_MHz: 5
   common_scs: 15
   plmn: "00101"
   tac: 7
@@ -26,6 +26,10 @@ cell_cfg:
   pucch:
     max_consecutive_kos: 0
     p0_nominal: -70
+    resource_set_size: 7
+    nof_cell_res_set_configs: 1
+    nof_cell_sr_res: 2
+    nof_cell_csi_res: 2
   slicing:
     -
       sst: 1
