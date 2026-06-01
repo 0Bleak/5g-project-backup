@@ -1,3 +1,5 @@
+gnb_id: 531
+gnb_id_bit_length: 32
 cu_cp:
   inactivity_timer: 7200
   amf:

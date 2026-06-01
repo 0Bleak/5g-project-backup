@@ -3,13 +3,21 @@
 
 ## Architecture Overview
 
-Two Dell Precision 5820 workstations running a 5G SA private network with:
-- 3 physical UEs (2 Waveshare robots + 1 Google Pixel) on RF DU via USRP X310
-- 3 virtual UEs (srsUE over ZMQ) on ZMQ DU with SNCF railway CQI injection
-- 1 shared CU connecting to both DUs
-- 2 independent OSC Near-RT RIC instances (one per DU) for full E2SM-RC PRB enforcement
-- CQI injection proxy replacing virtual UE CQI with real SNCF train measurement traces
-- xApp performing SLA-driven PRB allocation on both RICs simultaneously
+Two Dell Precision 5820 workstations running a 5G SA private network with one shared CU connecting two DUs — one RF DU serving physical UEs via USRP X310 and one ZMQ DU serving virtual UEs over GNU Radio ZMQ. Both DUs register simultaneously on a single OSC Near-RT RIC instance. A CQI injection proxy replaces virtual UE CQI with real SNCF train measurement traces. A single xApp performs SLA-driven PRB allocation across all UEs on both DUs.
+
+## Measurement Scenarios
+
+| Scenario | Physical UEs | Virtual UEs | Total UEs | Bandwidth | Traffic |
+|----------|-------------|-------------|-----------|-----------|---------|
+| A — Low Density | 3 robots | 0 | 3 | 5 MHz | Nominal UIC spec |
+| B — Medium Density | 3 robots | 3 | 6 | 10 MHz | Overloaded |
+| C — Very High Density | 3 robots | 7 | 10 | 10 MHz | Overloaded |
+
+Scenario A is complete. Scenario B is complete. Scenario C is the active measurement campaign.
+
+## ZMQ Scalability Limitation (Scenario C)
+
+Simultaneous attachment of more than 3 virtual UEs over ZeroMQ causes channel saturation due to the synchronous nature of the GNU Radio add_cc combiner which blocks the entire pipeline waiting for samples from all UEs simultaneously. This is a documented architectural limit of srsRAN + ZeroMQ. Barker et al. (arXiv:2502.00715, Clemson University, 2025) report the same ceiling at 3 concurrent ZMQ UEs with approximately 28 Mbps total unsaturated throughput on an identical testbed (OSC RIC + srsRAN + GNU Radio slicing). Their validated solution for 12 UEs is batching in groups of 3. Scenario C adopts the same strategy: 7 virtual UEs run in rotating groups of 3, with at most 3 transmitting simultaneously at any given time.
 
 ## Hardware
 
@@ -29,20 +37,28 @@ Two Dell Precision 5820 workstations running a 5G SA private network with:
 | PLMN | 00101 (MCC=001, MNC=01) |
 | Band | 3 (FDD) |
 | DL ARFCN | 368500 (1842.5 MHz) |
-| Bandwidth | 10 MHz |
+| Bandwidth | 5 MHz (Scenario A) / 10 MHz (Scenarios B and C) |
 | SCS | 15 kHz |
-| PRBs | 52 |
+| PRBs | 25 (5 MHz) / 52 (10 MHz) |
 | TAC | 7 |
 | DNN/APN | srsapn |
 | UE IP Pool | 10.45.0.0/16 |
 
 ## Network Slices
 
-| Slice | SD | Priority | Physical UE | Virtual UE | IMSI (Physical) | IMSI (Virtual) |
-|-------|----|----------|-------------|------------|-----------------|----------------|
-| CRITICAL | 000003 | 1 | Robot 1 | vUE1 | 001010000000005 | 001010000000006 |
-| PERFORMANCE | 000001 | 2 | Robot 2 | vUE2 | 001010000000004 | 001010000000007 |
-| BUSINESS | 000002 | 3 | Pixel | vUE3 | 001010000000003 | 001010000000008 |
+| Slice | SD | Priority | Physical UE | IMSI Physical | Virtual UE | IMSI Virtual |
+|-------|----|----------|-------------|---------------|------------|--------------|
+| CRITICAL | 000003 | 1 | Robot 1 | 001010000000005 | vUE1 | 001010000000006 |
+| PERFORMANCE | 000001 | 2 | Robot 2 | 001010000000004 | vUE2 | 001010000000007 |
+| BUSINESS | 000002 | 3 | Pixel | 001010000000003 | vUE3 | 001010000000008 |
+
+Additional virtual UEs for Scenario C:
+
+| Slice | SD | Virtual UE | IMSI Virtual |
+|-------|----|------------|--------------|
+| CRITICAL | 000003 | vUE4 | 001010000000009 |
+| PERFORMANCE | 000001 | vUE5 | 001010000000010 |
+| BUSINESS | 000002 | vUE6 | 001010000000011 |
 
 ## SIM Credentials (all UEs share same K/OPc)
 
@@ -54,8 +70,8 @@ Two Dell Precision 5820 workstations running a 5G SA private network with:
 
 ## Software Versions
 
-| Component | Software | Version/Commit |
-|-----------|----------|----------------|
+| Component | Software | Version |
+|-----------|----------|---------|
 | gNB CU/DU | srsRAN Project | release_25_10-192-g4bf1543936 |
 | srsUE | srsRAN 4G | 25.10.0 (commit 6bcbd9e5b) |
 | 5G Core | Open5GS | 2.7.6 |
@@ -63,55 +79,11 @@ Two Dell Precision 5820 workstations running a 5G SA private network with:
 | Database | MongoDB | 8.0 |
 | GNU Radio | GNU Radio | 3.10.x (system package) |
 
-## Network Topology
-Tower-1 (192.168.0.2)                    Tower-2 (192.168.0.3)
-┌─────────────────────────┐              ┌──────────────────────┐
-│ CU (srscu)              │──── NGAP ───>│ AMF (Open5GS)        │
-│   F1-C: 127.0.10.1      │              │   NGAP: 192.168.0.3  │
-│                         │              │                      │
-│ RF DU (srsdu)           │              │ SMF, UPF, NRF, etc   │
-│   F1-C: 127.0.10.2      │              │   UPF GTP-U: 192.168.0.3 │
-│   E2: 10.0.2.1 -> RIC 1 │              │   ogstun: 10.45.0.1  │
-│   WS: port 8001         │              │                      │
-│   Radio: USRP X310      │              │ MongoDB              │
-│                         │              │   6 subscribers       │
-│ ZMQ DU (srsdu)          │              └──────────────────────┘
-│   F1-C: 127.0.10.5      │
-│   E2: 10.0.4.1 -> RIC 2 │
-│   WS: port 8003         │
-│   Radio: ZMQ loopback   │
-│   sector_id: 1           │
-│   gnb_du_id: 1           │
-│                         │
-│ RIC 1 (Docker)          │
-│   Network: 10.0.2.0/24  │
-│   E2 term: 10.0.2.10    │
-│   SCTP: 36421            │
-│   xApp container:        │
-│     python_xapp_runner   │
-│                         │
-│ RIC 2 (Docker, project=ric2) │
-│   Network: 10.0.4.0/24  │
-│   E2 term: 10.0.4.10    │
-│   SCTP: 36421            │
-│   xApp container:        │
-│     python_xapp_runner_2 │
-│                         │
-│ ZMQ Broker (GNU Radio)  │
-│   DL: 3000->3010/3100/3200 │
-│   UL: 3001/3101/3201->3009 │
-│                         │
-│ 3x srsUE (ZMQ)         │
-│   vue1: netns=vue1       │
-│   vue2: netns=vue2       │
-│   vue3: netns=vue3       │
-│                         │
-│ CQI Injector            │
-│   Reads: 8001+8003       │
-│   Serves: 8002 (merged)  │
-│   Injects SNCF CQI on   │
-│   virtual UE RNTIs       │
-└─────────────────────────┘
+## Why Single RIC Works for Both DUs
+
+The OSC RIC e2mgr stores E2 node registrations in Redis using ranName as the unique key, derived from PLMN + gnb_id + gnb_du_id. Previously both DUs used gnb_id 411 (hex 00019b), so the second DU overwrote the first in Redis. The fix assigns distinct gnb_id values: RF DU uses gnb_id 531 (hex 00000213) producing ranName gnbd_001_001_00000213_0, and ZMQ DU uses gnb_id 532 producing ranName gnbd_001_001_00000213_1. Both coexist in a single RIC instance. The second RIC instance (oran-sc-ric-2) is no longer needed and has been removed.
+
+The ZMQ DU E2 bind address is 10.0.2.2 — a secondary IP manually added to the RIC Docker bridge on every reboot (see Phase 4).
 
 ## File Locations
 
@@ -124,23 +96,23 @@ Tower-1 (192.168.0.2)                    Tower-2 (192.168.0.3)
 | ZMQ DU config | ~/5g-virtual/du_zmq.yml |
 | CU binary | ~/srsRAN_Project_clean/build/apps/cu/srscu |
 | DU binary | ~/srsRAN_Project_clean/build/apps/du/srsdu |
-| Monolithic gNB binary | ~/srsRAN_Project_clean/build/apps/gnb/gnb |
 | srsUE binary | /usr/local/bin/srsue |
-| srsUE lib fix | /etc/ld.so.conf.d/srsran.conf (contains /usr/local/lib) |
-| xApp: cqi_driven_xapp.py | ~/oran-sc-ric/xApps/python/cqi_driven_xapp.py |
-| xApp: metrics_logger_v2.py | ~/oran-sc-ric/xApps/python/metrics_logger_v2.py |
-| Virtual UE configs | ~/5g-virtual/ue1.conf, ue2.conf, ue3.conf |
-| ZMQ broker | ~/5g-virtual/zmq_broker.py |
-| CQI injector (merged) | ~/5g-virtual/cqi_injector.py |
-| CQI injector (virtual only) | ~/5g-virtual/cqi_injector_virtual.py |
+| srsUE lib fix | /etc/ld.so.conf.d/srsran.conf |
+| xApp Scenario A | ~/oran-sc-ric/xApps/python/cqi_driven_xapp_three_phy.py |
+| xApp Scenario B/C | ~/oran-sc-ric/xApps/python/cqi_driven_xapp_six_ue.py |
+| Logger v2 (Scenario A, port 8001) | ~/oran-sc-ric/xApps/python/metrics_logger_v2.py |
+| Logger v3 (Scenario B/C, port 8002) | ~/oran-sc-ric/xApps/python/metrics_logger_v3.py |
+| Virtual UE configs | ~/5g-virtual/ue1.conf to ue7.conf |
+| ZMQ broker 3 UEs (Scenario B) | ~/5g-virtual/zmq_broker_3ue.py |
+| ZMQ broker 6 UEs (Scenario C) | ~/5g-virtual/zmq_broker_6ue.py |
+| CQI injector merged | ~/5g-virtual/cqi_injector.py |
+| CQI injector virtual only | ~/5g-virtual/cqi_injector_virtual.py |
+| Virtual UE traffic generator | ~/5g-virtual/virtual_ue_traffic.py |
 | SNCF traces (183 files) | ~/5g-virtual/sncf_traces/ |
-| RIC 1 docker compose | ~/oran-sc-ric/docker-compose.yml |
-| RIC 1 .env | ~/oran-sc-ric/.env |
-| RIC 2 docker compose | ~/oran-sc-ric-2/docker-compose.yml |
-| RIC 2 .env | ~/oran-sc-ric-2/.env |
-| RIC 2 configs | ~/oran-sc-ric-2/ric/configs/ |
+| RIC docker compose | ~/oran-sc-ric/docker-compose.yml |
+| RIC .env | ~/oran-sc-ric/.env |
 | srsRAN performance script | ~/srsRAN_Project_clean/scripts/srsran_performance |
-| Backup of everything | ~/5g-project-backup/tower-1/ |
+| Datasets | ~/datasets/ |
 
 ### Tower-2
 
@@ -150,9 +122,8 @@ Tower-1 (192.168.0.2)                    Tower-2 (192.168.0.3)
 | SMF config | /etc/open5gs/smf.yaml |
 | UPF config | /etc/open5gs/upf.yaml |
 | NRF config | /etc/open5gs/nrf.yaml |
-| All Open5GS configs | /etc/open5gs/*.yaml |
+| Traffic server | ~/traffic_server.py |
 | Subscriber dump | ~/5g-project-backup/tower-2/subscribers_dump.json |
-| Backup of everything | ~/5g-project-backup/tower-2/ |
 
 ### Robots (Jetson Orin Nano)
 
@@ -161,21 +132,14 @@ Tower-1 (192.168.0.2)                    Tower-2 (192.168.0.3)
 | connect5g script | /usr/local/bin/connect-5g.sh |
 | dhclient hook | /etc/dhcp/dhclient-exit-hooks.d/no-default-route |
 | dhclient config | /etc/dhcp/dhclient-usb2.conf |
-
-## Why Two RIC Instances
-
-The OSC RIC e2mgr uses `ranName` as the unique key in Redis for E2 node registration. Both the RF DU and ZMQ DU derive their ranName from the same CU identity (PLMN 00101 + gnb_id 411), producing `gnbd_001_001_00019b_X`. When both DUs connect to the same RIC, the second overwrites the first. This is an OSC RIC limitation — it was not designed for multi-DU registration from the same gNB.
-
-The solution: run two independent RIC instances on separate Docker networks. RIC 1 (10.0.2.0/24) serves the RF DU. RIC 2 (10.0.4.0/24) serves the ZMQ DU. Each RIC has its own Redis, e2mgr, e2term, submgr, and xApp runner. Both RICs provide full E2SM-RC PRB enforcement independently.
-
-The CU accepted both DUs after setting `sector_id: 1` and `gnb_du_id: 1` on the ZMQ DU config (resolves "Duplicate served cell CGI" F1 Setup rejection). The CU sees them as du_index=0 (RF) and du_index=1 (ZMQ).
+| Critical traffic | ~/critical_traffic.py |
+| Performance traffic | ~/performance_traffic.py |
 
 ## Full Startup Procedure
 
 ### Phase 1: Tower-2 — Core Network
 
 ```bash
-# 1a. NAT and forwarding (after every reboot)
 sudo sysctl -w net.ipv4.ip_forward=1
 sudo iptables -t nat -C POSTROUTING -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE 2>/dev/null \
   || sudo iptables -t nat -A POSTROUTING -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE
@@ -184,21 +148,11 @@ sudo iptables -C FORWARD -i ogstun -o eno1 -j ACCEPT 2>/dev/null \
 sudo iptables -C FORWARD -i eno1 -o ogstun -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null \
   || sudo iptables -I FORWARD 2 -i eno1 -o ogstun -m state --state RELATED,ESTABLISHED -j ACCEPT
 sudo ufw disable
-
-# 1b. Start Open5GS
 sudo systemctl restart open5gs-nrfd
 sleep 2
 sudo systemctl restart open5gs-scpd open5gs-ausfd open5gs-udmd \
   open5gs-udrd open5gs-pcfd open5gs-bsfd open5gs-smfd open5gs-upfd open5gs-amfd
-
-# 1c. Verify AMF listening
 sudo ss -lnp | grep 38412
-
-# 1d. Verify subscribers (first time or after DB reset)
-mongosh open5gs --eval 'db.subscribers.find({},{imsi:1,"slice.0.sd":1,_id:0}).forEach(printjson)'
-# Must show 6 subscribers with correct SD values:
-# IMSI 003 -> sd:000002, IMSI 004 -> sd:000001, IMSI 005 -> sd:000003
-# IMSI 006 -> sd:000003, IMSI 007 -> sd:000001, IMSI 008 -> sd:000002
 ```
 
 ### Phase 2: Tower-1 — System Prerequisites (after every reboot)
@@ -208,48 +162,54 @@ cd ~/srsRAN_Project_clean
 sudo bash scripts/srsran_performance
 sudo ip link set enp9s0 mtu 9000
 sudo sysctl -w net.core.wmem_max=24912805
-
-# Network namespaces for virtual UEs
 sudo ip netns add vue1 2>/dev/null || true
 sudo ip netns add vue2 2>/dev/null || true
 sudo ip netns add vue3 2>/dev/null || true
+sudo ip netns add vue4 2>/dev/null || true
+sudo ip netns add vue5 2>/dev/null || true
+sudo ip netns add vue6 2>/dev/null || true
+sudo ip netns add vue7 2>/dev/null || true
 ```
 
-### Phase 3: Tower-1 — Start Both RICs
+### Phase 3: Tower-1 — Start RIC
 
 ```bash
-# RIC 1 (physical DU)
 cd ~/oran-sc-ric
 docker compose up -d
-sleep 15
+sleep 20
 docker logs ric_submgr 2>&1 | tail -3
 # Must show: RMR is ready now ...
-
-# RIC 2 (virtual DU)
-cd ~/oran-sc-ric-2
-docker compose -p ric2 up -d
-sleep 15
-docker logs ric2_submgr 2>&1 | tail -3
-# Must show: RMR is ready now ...
 ```
 
-### Phase 4: Tower-1 — Deploy xApps to Both Containers
+### Phase 4: Tower-1 — Add ZMQ DU E2 bind address (after every reboot)
 
 ```bash
-# RIC 1 container
-cd ~/oran-sc-ric
-docker compose exec python_xapp_runner pip3 install websocket-client
-docker cp ~/oran-sc-ric/xApps/python/cqi_driven_xapp.py python_xapp_runner:/opt/xApps/
-docker cp ~/oran-sc-ric/xApps/python/metrics_logger_v2.py python_xapp_runner:/opt/xApps/
-docker exec python_xapp_runner chmod +x /opt/xApps/cqi_driven_xapp.py /opt/xApps/metrics_logger_v2.py
-
-# RIC 2 container
-docker exec python_xapp_runner_2 pip3 install websocket-client
-docker cp ~/oran-sc-ric/xApps/python/cqi_driven_xapp.py python_xapp_runner_2:/opt/xApps/
-docker exec python_xapp_runner_2 chmod +x /opt/xApps/cqi_driven_xapp.py
+BRIDGE=$(ip link | grep br- | head -1 | awk '{print $2}' | tr -d ':')
+sudo ip addr add 10.0.2.2/24 dev $BRIDGE
 ```
 
-### Phase 5: Tower-1 — Start CU (dedicated terminal)
+### Phase 5: Tower-1 — Deploy xApps to RIC container
+
+```bash
+cd ~/oran-sc-ric
+docker compose exec python_xapp_runner pip3 install websocket-client
+
+# Scenario A
+docker cp ~/oran-sc-ric/xApps/python/cqi_driven_xapp_three_phy.py python_xapp_runner:/opt/xApps/
+docker cp ~/oran-sc-ric/xApps/python/metrics_logger_v2.py python_xapp_runner:/opt/xApps/
+
+# Scenario B and C
+docker cp ~/oran-sc-ric/xApps/python/cqi_driven_xapp_six_ue.py python_xapp_runner:/opt/xApps/
+docker cp ~/oran-sc-ric/xApps/python/metrics_logger_v3.py python_xapp_runner:/opt/xApps/
+
+docker exec python_xapp_runner chmod +x \
+  /opt/xApps/cqi_driven_xapp_three_phy.py \
+  /opt/xApps/cqi_driven_xapp_six_ue.py \
+  /opt/xApps/metrics_logger_v2.py \
+  /opt/xApps/metrics_logger_v3.py
+```
+
+### Phase 6: Tower-1 — Start CU
 
 ```bash
 cd ~/srsRAN_Project_clean/build/apps/cu
@@ -257,70 +217,58 @@ sudo ./srscu -c ~/srsRAN_Project_clean/configs/ligm/cu.yml
 # Wait for: N2: Connection to AMF on 192.168.0.3:38412 completed
 ```
 
-### Phase 6: Tower-1 — Start RF DU (dedicated terminal)
+### Phase 7: Tower-1 — Start RF DU
 
 ```bash
 cd ~/srsRAN_Project_clean/build/apps/du
 sudo ./srsdu -c ~/srsRAN_Project_clean/configs/ligm/du_x310.yml
-# Wait for:
-#   F1-C: Connection to CU-CP on 127.0.10.1:38472 completed
-#   E2AP: Connection to Near-RT-RIC on 10.0.2.10:36421 completed
-#   Remote control server listening on 0.0.0.0:8001
+# Wait for: E2AP: Connection to Near-RT-RIC on 10.0.2.10:36421 completed
+# Wait for: Remote control server listening on 0.0.0.0:8001
 ```
 
-### Phase 7: Tower-1 — Start Virtual UEs (dedicated terminal)
+### Phase 8: Tower-1 — Start Virtual UEs
 
 ```bash
-# Start UEs first — they wait for PHY init until DU starts
-sudo srsue ~/5g-virtual/ue1.conf &
-sudo srsue ~/5g-virtual/ue2.conf &
-sudo srsue ~/5g-virtual/ue3.conf &
-sleep 3
+# Scenario B — 3 virtual UEs simultaneously
+sudo -b srsue ~/5g-virtual/ue1.conf
+sudo -b srsue ~/5g-virtual/ue2.conf
+sudo -b srsue ~/5g-virtual/ue3.conf
+
+# Scenario C — start first batch of 3 simultaneously
+sudo -b srsue ~/5g-virtual/ue1.conf
+sudo -b srsue ~/5g-virtual/ue2.conf
+sudo -b srsue ~/5g-virtual/ue3.conf
+# After first batch connected, kill and start second batch:
+# sudo pkill -9 -f srsue
+# sudo -b srsue ~/5g-virtual/ue4.conf
+# sudo -b srsue ~/5g-virtual/ue5.conf
+# sudo -b srsue ~/5g-virtual/ue6.conf
 ```
 
-### Phase 8: Tower-1 — Start ZMQ Broker (dedicated terminal)
+### Phase 9: Tower-1 — Start ZMQ Broker
 
 ```bash
-python3 ~/5g-virtual/zmq_broker.py
-# Wait for: [BROKER] 3-UE ZMQ broker starting
+# Scenario B
+python3 ~/5g-virtual/zmq_broker_3ue.py
+
+# Scenario C
+python3 ~/5g-virtual/zmq_broker_6ue.py
 ```
 
-### Phase 9: Tower-1 — Start ZMQ DU (dedicated terminal)
+### Phase 10: Tower-1 — Start ZMQ DU
 
 ```bash
 cd ~/srsRAN_Project_clean/build/apps/du
 sudo ./srsdu -c ~/5g-virtual/du_zmq.yml
-# Wait for:
-#   F1-C: Connection to CU-CP on 127.0.10.1:38472 completed
-#   E2AP: Connection to Near-RT-RIC on 10.0.4.10:36421 completed
-#   Remote control server listening on 0.0.0.0:8003
-# Virtual UEs should then show: Random Access Complete, PDU Session Establishment successful
+# Wait for: E2AP: Connection to Near-RT-RIC on 10.0.2.10:36421 completed
+# Wait for: Remote control server listening on 0.0.0.0:8003
+# Virtual UEs should show: PDU Session Establishment successful
 ```
 
-### Phase 10: Connect Physical UEs
+### Phase 11: Connect Physical UEs
 
-Robot 1 first (CRITICAL), Robot 2 second (PERFORMANCE), Pixel last (BUSINESS).
+Robot 1 first (CRITICAL), Robot 2 second (PERFORMANCE), Pixel last (BUSINESS). On each robot:
 
-On each robot, before first use:
-```bash
-# One-time setup on each robot
-sudo bash -c 'cat > /etc/dhcp/dhclient-exit-hooks.d/no-default-route << "EOF"
-#!/bin/bash
-if [ "$interface" = "usb2" ]; then
-    /sbin/ip route del default via 192.168.225.1 2>/dev/null
-    /sbin/ip route del default dev usb2 2>/dev/null
-fi
-EOF
-chmod +x /etc/dhcp/dhclient-exit-hooks.d/no-default-route'
-
-sudo bash -c 'cat > /etc/dhcp/dhclient-usb2.conf << "EOF"
-interface "usb2" {
-    request subnet-mask, broadcast-address;
-}
-EOF'
-```
-
-Then connect:
 ```bash
 sudo connect-5g.sh
 # Expected: SUCCESS: 5G connected
@@ -328,74 +276,82 @@ sudo connect-5g.sh
 
 For Pixel: toggle airplane mode off.
 
-### Phase 11: Verify Both RICs Have E2 Nodes
+### Phase 12: Verify Both DUs on Single RIC
 
 ```bash
-echo "=== RIC 1 ===" && docker exec ric_dbaas redis-cli KEYS '*RAN*'
-echo "=== RIC 2 ===" && docker exec ric2_dbaas redis-cli KEYS '*RAN*'
-# RIC 1 must show: gnbd_001_001_00019b_0
-# RIC 2 must show: gnbd_001_001_00019b_1
+docker exec ric_dbaas redis-cli KEYS '*RAN*'
+# Must show:
+# {e2Manager},RAN:gnbd_001_001_00000213_0
+# {e2Manager},RAN:gnbd_001_001_00000213_1
 ```
 
-### Phase 12: Start CQI Injector (dedicated terminal)
+### Phase 13: Start CQI Injector
 
 ```bash
-# Merged injector — reads 8001 (RF DU) + 8003 (ZMQ DU), serves 8002
-# Passes physical UE CQI through unmodified
-# Replaces virtual UE CQI with SNCF traces
-# Remaps virtual RNTIs to 0xF001+ range to avoid collision
 python3 ~/5g-virtual/cqi_injector.py --dataset_dir ~/5g-virtual/sncf_traces/
-# Wait for: Connected to RF DU, Connected to ZMQ gNB, RNTI remappings
+# Wait for: Status: 3 physical + 3 virtual UEs
 ```
 
-### Phase 13: Start xApp on RIC 1 — Physical UEs (dedicated terminal)
+### Phase 14: Start Robot Traffic (on each robot via SSH)
+
+```bash
+# Robot 1 (CRITICAL)
+python3 ~/critical_traffic.py --server 10.45.0.1 --duration 999999
+
+# Robot 2 (PERFORMANCE)
+python3 ~/performance_traffic.py --server 10.45.0.1 --duration 999999
+
+# Pixel: open YouTube or any streaming app
+```
+
+### Phase 15: Start Virtual UE Traffic
+
+```bash
+python3 ~/5g-virtual/virtual_ue_traffic.py
+```
+
+### Phase 16: Start Traffic Server on Tower-2
+
+```bash
+python3 ~/traffic_server.py
+```
+
+### Phase 17: Start xApp
 
 ```bash
 cd ~/oran-sc-ric
-docker compose exec python_xapp_runner /opt/xApps/cqi_driven_xapp.py \
-  --ue_ids 0,1,2 --ue_slices 3,1,2 --ws_url 10.0.2.1:8001
-# Slice mapping: F1AP 0=CRITICAL, 1=PERFORMANCE, 2=BUSINESS
-# NOTE: verify RNTI-to-slice mapping matches connection order via AMF log on Tower-2:
-# sudo grep 'Registration complete' /var/log/open5gs/amf.log | grep '00101000000000[345]' | tail -3
+
+# Scenario A
+docker compose exec python_xapp_runner python3 /opt/xApps/cqi_driven_xapp_three_phy.py
+
+# Scenario B and C
+docker compose exec python_xapp_runner python3 /opt/xApps/cqi_driven_xapp_six_ue.py
 ```
 
-### Phase 14: Start xApp on RIC 2 — Virtual UEs (dedicated terminal)
+### Phase 18: Start Logger and Collect Dataset
 
 ```bash
-# Virtual-only CQI injector for RIC 2 xApp
-python3 ~/5g-virtual/cqi_injector_virtual.py --dataset_dir ~/5g-virtual/sncf_traces/ &
-# Wait for: [INJECTOR] Virtual CQI server on port 8004
-
-docker exec -it python_xapp_runner_2 /opt/xApps/cqi_driven_xapp.py \
-  --ue_ids 0,1,2 --ue_slices 3,1,2 --ws_url 10.0.4.1:8004 --e2_node_id gnbd_001_001_00019b_1
-# Should show varying CQI from SNCF traces
-```
-
-### Phase 15: Start Logger and Traffic
-
-```bash
-# Logger (connects to merged port 8002 for all 6 UEs)
 cd ~/oran-sc-ric
 docker exec python_xapp_runner bash -c 'rm -f /tmp/ue_metrics_log.csv /tmp/prb_decisions.json'
-# Start logger pointing to port 8002 (see metrics_logger_v2.py, change ws URL to 10.0.2.1:8002)
 
-# Traffic server on Tower-2
-python3 traffic_server.py &
+# Scenario A
+docker compose exec python_xapp_runner python3 /opt/xApps/metrics_logger_v2.py
 
-# Traffic generators on robots
-# Robot 1 (Critical): python3 critical_traffic.py --server 10.45.0.1 --duration 3600
-# Robot 2 (Performance): python3 performance_traffic.py --server 10.45.0.1 --duration 3600
-# Pixel: open YouTube/Twitch in browser
+# Scenario B and C
+docker compose exec python_xapp_runner python3 /opt/xApps/metrics_logger_v3.py
 ```
 
-### Phase 16: Collect Dataset
+Monitor in real time:
 
 ```bash
-cd ~/oran-sc-ric
-docker exec python_xapp_runner bash -c 'pkill -f metrics_logger 2>/dev/null' || true
-docker cp python_xapp_runner:/tmp/ue_metrics_log.csv ~/datasets/ue_SESSION_NAME.csv
-wc -l ~/datasets/ue_SESSION_NAME.csv
-head -2 ~/datasets/ue_SESSION_NAME.csv
+docker exec python_xapp_runner bash -c 'tail -f /tmp/ue_metrics_log.csv'
+```
+
+Collect when done:
+
+```bash
+docker cp python_xapp_runner:/tmp/ue_metrics_log.csv \
+  ~/datasets/scen_X_$(date +%Y%m%d_%H%M).csv
 ```
 
 ## Terminal Layout (Tower-1)
@@ -403,78 +359,71 @@ head -2 ~/datasets/ue_SESSION_NAME.csv
 | Terminal | Process |
 |----------|---------|
 | 1 | CU (srscu) |
-| 2 | RF DU (srsdu du_x310.yml) |
-| 3 | ZMQ DU (srsdu du_zmq.yml) |
-| 4 | Virtual UEs (3x srsue background) |
+| 2 | RF DU (du_x310.yml) |
+| 3 | ZMQ DU (du_zmq.yml) |
+| 4 | Virtual UEs (srsue background) |
 | 5 | ZMQ Broker |
-| 6 | CQI Injector (merged, port 8002) |
-| 7 | CQI Injector virtual-only (port 8004) |
-| 8 | xApp RIC 1 (physical) |
-| 9 | xApp RIC 2 (virtual) |
-| 10 | Logger |
-| 11 | General commands |
+| 6 | CQI Injector |
+| 7 | Virtual UE Traffic |
+| 8 | xApp |
+| 9 | Logger |
+| 10 | General commands |
 
 ## Key Implementation Notes
 
+- **Single RIC for both DUs.** gnb_id 531 on RF DU and gnb_id 532 on ZMQ DU produce distinct ranNames. No second RIC instance needed.
+- **10.0.2.2 must be added after every reboot.** It is the E2 bind address for the ZMQ DU on the RIC Docker bridge. See Phase 4.
+- **ZMQ startup order is critical.** Start UEs simultaneously, then broker, then ZMQ DU. The GNU Radio add_cc block requires all UE streams active before the DU connects. Do not stagger UE launches.
+- **Scenario C uses batching of 3 virtual UEs at a time.** ZeroMQ saturation limit documented by Barker et al. arXiv:2502.00715.
+- **Virtual UE RNTIs are remapped to 0xF001+ range** by the CQI injector to avoid RNTI collision with physical UEs.
+- **F1AP-ID to slice mapping resets on CU/DU restart.** Always reconnect Robot 1 (CRITICAL) first, Robot 2 (PERFORMANCE) second, Pixel (BUSINESS) third.
+- **Pixel CQI is always 5.** This is a known characteristic of the Quectel/Pixel modem combination in this RF environment. Use it as a ground truth anchor for RNTI identification in post-processing.
 - **Slice assignment is server-side only.** COTS UEs send SD:0xffffff (wildcard). AMF resolves from MongoDB.
-- **CQI is not available via E2SM-KPM.** Comes from DU websocket port 8001/8003.
-- **F1AP-ID mapping resets on CU/DU restart.** Reconnect Robot 1 first after restart.
-- **AMF SD format is critical.** MongoDB SD must be 6-char hex: 000001, 000002, 000003.
-- **NAT rules lost on Tower-2 reboot.** Must reapply.
-- **sector_id: 1 on ZMQ DU** resolves "Duplicate served cell CGI" CU rejection.
-- **gnb_du_id: 1 on ZMQ DU** ensures different E2 node identity (gnbd_..._1 vs _0).
-- **Two RIC instances required** because OSC RIC e2mgr deduplicates by ranName.
-- **RIC 2 uses project name `ric2`** — always use `docker compose -p ric2` commands.
-- **srsUE library path** — /etc/ld.so.conf.d/srsran.conf must contain /usr/local/lib, run ldconfig.
-- **ZMQ startup order for split DU** — broker first, then UEs, then DU (opposite of monolithic gnb).
+- **CQI is not available via E2SM-KPM.** It comes from the DU websocket port 8001 (RF DU) and 8003 (ZMQ DU), merged and injected on port 8002.
+- **NAT rules lost on Tower-2 reboot.** Must reapply Phase 1.
+- **srsUE library path.** /etc/ld.so.conf.d/srsran.conf must contain /usr/local/lib, run ldconfig after any srsRAN 4G install.
+
+## Dataset Post-Processing
+
+After collection, run the cleaning script to fix any slice mislabeling caused by reconnection events:
+
+The RNTI-to-slice ground truth is:
+
+| RNTI range | DU | Identity |
+|------------|-----|---------|
+| < 0xF001 and high UL brate ~4-5 Mbps | RF | CRITICAL Robot 1 IMSI 005 |
+| < 0xF001 and UL brate ~0.24 Mbps | RF | PERFORMANCE Robot 2 IMSI 004 |
+| < 0xF001 and CQI always 5 | RF | BUSINESS Pixel IMSI 003 |
+| >= 0xF001 first remapped | ZMQ | CRITICAL vUE1 IMSI 006 |
+| >= 0xF001 second remapped | ZMQ | PERFORMANCE vUE2 IMSI 007 |
+| >= 0xF001 third remapped | ZMQ | BUSINESS vUE3 IMSI 008 |
 
 ## Troubleshooting
 
-**CU rejects ZMQ DU with "Duplicate served cell CGI":**
-Ensure du_zmq.yml has `sector_id: 1` under cell_cfg.
+**ZMQ DU segfaults on E2 connection:** 10.0.2.2 not added to RIC bridge. Run Phase 4.
 
-**CU rejects ZMQ DU with "Duplicate DU ID":**
-Ensure du_zmq.yml has `gnb_du_id: 1` as top-level parameter.
+**CU rejects ZMQ DU with Duplicate served cell CGI:** Ensure du_zmq.yml has sector_id: 1 under cell_cfg.
 
-**RIC 2 not registering ZMQ DU:**
-Check all config files in ~/oran-sc-ric-2/ric/configs/ use 10.0.4.x addresses, not 10.0.2.x.
+**CU rejects ZMQ DU with Duplicate DU ID:** Ensure du_zmq.yml has gnb_du_id: 1 as top-level parameter.
 
-**ZMQ DU segfaults on E2 connection:**
-E2 bind_addr doesn't exist. Ensure 10.0.4.1 exists (Docker bridge for ric2 network creates it).
+**Only one DU in Redis after both connect:** gnb_id collision. Verify RF DU has gnb_id: 531 and ZMQ DU has gnb_id: 532.
 
-**ZMQ DU "Failed to bind UDP socket":**
-F1-U address conflict. Change bind_addr in f1ap and f1u sections to unused 127.0.10.x address.
+**Virtual UEs stuck at Attaching with no PRACH:** Wrong startup order. Kill all, restart: UEs simultaneously first, then broker, then ZMQ DU.
 
-**Virtual UEs stuck at "Attaching":**
-ZMQ broker not running, or DU not started yet. Start broker first, then DU.
+**Virtual UEs all show preamble_index=0 and never complete RA with 6+ UEs:** Known srsUE 25.10 limit. Use batching of 3.
 
-**Virtual UEs stuck at "Waiting PHY to initialize":**
-Normal before broker/DU start. They will proceed once ZMQ DU starts.
+**xApp shows constant CQI=15 for virtual UEs:** xApp connecting to raw DU port 8003 instead of injector port 8002.
 
-**Physical UE no IP after connect5g.sh:**
-Check AMF log: sudo tail -50 /var/log/open5gs/amf.log on Tower-2.
+**Logger writes only 1 row:** websocket-client not installed in container. Run pip3 install websocket-client inside the container.
 
-**No traffic despite UE has IP:**
-NAT FORWARD rules missing on Tower-2. Reapply.
+**Physical UE no IP after connect5g.sh:** Check AMF log on Tower-2: sudo tail -50 /var/log/open5gs/amf.log
 
-**xApp shows constant CQI=15 for virtual UEs:**
-xApp connecting to raw DU port (8003) instead of injector port (8004 or 8002).
-
-**Logger writes only 1 row:**
-websocket-client not installed in container. Run pip3 install websocket-client.
-
-**"Address already in use" when starting xApp:**
-Old xApp process still running. Kill with: docker exec CONTAINER bash -c 'pkill -9 -f python'
-
-**RIC 2 containers conflict with RIC 1:**
-Container names must be different. docker-compose.yml should have ric2_ prefix on container_name fields.
-
-**RIC 2 network creation fails "Pool overlaps":**
-Subnet 10.0.4.0/24 must be set in both .env AND at bottom of docker-compose.yml.
+**No traffic despite UE has IP:** NAT FORWARD rules missing on Tower-2. Reapply Phase 1.
 
 ## Subscriber Registration (if DB needs reset)
 
 Run on Tower-2:
+
 ```bash
 mongosh open5gs --eval '
 db.subscribers.insertMany([
@@ -537,6 +486,36 @@ db.subscribers.insertMany([
       "session": [{"name": "srsapn", "type": 3,
         "qos": {"index": 9, "arp": {"priority_level": 8, "pre_emption_capability": 1, "pre_emption_vulnerability": 1}},
         "ambr": {"downlink": {"value": 1, "unit": 3}, "uplink": {"value": 1, "unit": 3}}}]}]
+  },
+  {
+    "imsi": "001010000000009",
+    "security": {"k": "0c0a34601d4f07677303652c0462535b", "opc": "63bfa50ee6523365ff14c1f45f88737d", "amf": "8000"},
+    "schema_version": 1, "access_restriction_data": 32, "subscriber_status": 0, "network_access_mode": 0,
+    "ambr": {"downlink": {"value": 1, "unit": 3}, "uplink": {"value": 1, "unit": 3}},
+    "slice": [{"sst": 1, "sd": "000003", "default_indicator": true,
+      "session": [{"name": "srsapn", "type": 3,
+        "qos": {"index": 9, "arp": {"priority_level": 8, "pre_emption_capability": 1, "pre_emption_vulnerability": 1}},
+        "ambr": {"downlink": {"value": 1, "unit": 3}, "uplink": {"value": 1, "unit": 3}}}]}]
+  },
+  {
+    "imsi": "001010000000010",
+    "security": {"k": "0c0a34601d4f07677303652c0462535b", "opc": "63bfa50ee6523365ff14c1f45f88737d", "amf": "8000"},
+    "schema_version": 1, "access_restriction_data": 32, "subscriber_status": 0, "network_access_mode": 0,
+    "ambr": {"downlink": {"value": 1, "unit": 3}, "uplink": {"value": 1, "unit": 3}},
+    "slice": [{"sst": 1, "sd": "000001", "default_indicator": true,
+      "session": [{"name": "srsapn", "type": 3,
+        "qos": {"index": 9, "arp": {"priority_level": 8, "pre_emption_capability": 1, "pre_emption_vulnerability": 1}},
+        "ambr": {"downlink": {"value": 1, "unit": 3}, "uplink": {"value": 1, "unit": 3}}}]}]
+  },
+  {
+    "imsi": "001010000000011",
+    "security": {"k": "0c0a34601d4f07677303652c0462535b", "opc": "63bfa50ee6523365ff14c1f45f88737d", "amf": "8000"},
+    "schema_version": 1, "access_restriction_data": 32, "subscriber_status": 0, "network_access_mode": 0,
+    "ambr": {"downlink": {"value": 1, "unit": 3}, "uplink": {"value": 1, "unit": 3}},
+    "slice": [{"sst": 1, "sd": "000002", "default_indicator": true,
+      "session": [{"name": "srsapn", "type": 3,
+        "qos": {"index": 9, "arp": {"priority_level": 8, "pre_emption_capability": 1, "pre_emption_vulnerability": 1}},
+        "ambr": {"downlink": {"value": 1, "unit": 3}, "uplink": {"value": 1, "unit": 3}}}]}]
   }
 ])'
 ```
@@ -544,19 +523,23 @@ db.subscribers.insertMany([
 ## Clean Shutdown
 
 ```bash
-# Tower-1: Kill in reverse order
-# Ctrl+C: xApps, injectors, traffic generators
+# Tower-1
 sudo pkill -9 -f srsue
 sudo pkill -f zmq_broker
+sudo pkill -f cqi_injector
+sudo pkill -f virtual_ue_traffic
 sudo pkill -9 -f srsdu
 sudo pkill -9 -f srscu
 cd ~/oran-sc-ric && docker compose down
-cd ~/oran-sc-ric-2 && docker compose -p ric2 down
 sudo ip netns del vue1 2>/dev/null
 sudo ip netns del vue2 2>/dev/null
 sudo ip netns del vue3 2>/dev/null
+sudo ip netns del vue4 2>/dev/null
+sudo ip netns del vue5 2>/dev/null
+sudo ip netns del vue6 2>/dev/null
+sudo ip netns del vue7 2>/dev/null
 
-# Tower-2:
+# Tower-2
 sudo systemctl stop open5gs-amfd open5gs-smfd open5gs-upfd open5gs-nrfd \
   open5gs-scpd open5gs-ausfd open5gs-udmd open5gs-udrd open5gs-pcfd open5gs-bsfd
 ```

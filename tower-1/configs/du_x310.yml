@@ -1,3 +1,6 @@
+gnb_id: 531
+gnb_id_bit_length: 32
+gnb_du_id: 0
 f1ap:
   cu_cp_addr: 127.0.10.1
   bind_addr: 127.0.10.2
@@ -14,11 +17,12 @@ ru_sdr:
 cell_cfg:
   dl_arfcn: 368500
   band: 3
-  channel_bandwidth_MHz: 5
+  channel_bandwidth_MHz: 10
   common_scs: 15
   plmn: "00101"
   tac: 7
   pci: 1
+  sector_id: 0
   pdsch:
     max_consecutive_kos: 0
   pusch:
