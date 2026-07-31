@@ -27,7 +27,7 @@ Two Dell Precision 5820 workstations running a 5G SA private network with one CU
 | PLMN       | 00101 (MCC=001, MNC=01) |
 | Band       | 3 (FDD)                 |
 | DL ARFCN   | 368500 (1842.5 MHz)     |
-| Bandwidth  | 5 MHz                   |
+| Bandwidth  | 10 MHz                   |
 | SCS        | 15 kHz                  |
 | PRBs       | 25                      |
 | TAC        | 7                       |
