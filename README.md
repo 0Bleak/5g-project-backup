@@ -128,7 +128,7 @@ Never commit real K/OPc/IMSI values to version control.
 
 Virtual mode swaps the USRP/physical-UE path for `srsUE` instances over ZMQ, replaying the railway CQI/traffic traces in `traces/sncf_traces/` — no radio hardware required. The RIC, xApp, and core are otherwise untouched, so the same control loop runs against live over-the-air conditions or repeatable train-collected channel dynamics.
 
-The RSlice agents shipped in `xapps/` were themselves trained offline on real CQI data collected from SNCF trains (up to 350 km/h) rather than on synthetic channels — this platform is the substrate they run and were evaluated on, not the training pipeline. For the training methodology and the full labeled dataset, see the paper and the companion IEEE DataPort release referenced below. `Physical_eval/` and `virtual_eval/` contain the logged runs behind the paper's results, kept here for reference rather than as a how-to.
+The RSlice agents shipped in `xapps/` were trained online on real CQI data collected from SNCF trains (up to 350 km/h) rather than on synthetic channels — this platform is the substrate they run and were evaluated on, not the training pipeline. For the training methodology and the full labeled dataset, see the paper and the companion IEEE DataPort release referenced below. `Physical_eval/` and `virtual_eval/` contain the logged runs behind the paper's results, kept here for reference rather than as a how-to.
 
 ---
 
