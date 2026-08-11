@@ -1,4 +1,4 @@
-# PVTR — A Physical–Virtual O-RAN Testbed for FRMCS Slicing
+# PVTR  A Physical–Virtual O-RAN Testbed for FRMCS Slicing
 
 PVTR is a hybrid physical–virtual O-RAN testbed for evaluating dynamic, slice-aware radio resource control for the Future Railway Mobile Communication System (FRMCS). The same 5G core, CU/DU, near-RT RIC, slice configuration, and xApp run unmodified across two execution modes:
 
